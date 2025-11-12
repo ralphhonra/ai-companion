@@ -1,0 +1,29 @@
+wake_word: "jarvis"
+whisper_model: "medium"  # Options: tiny, base, small, medium (larger = more accurate but slower)
+ollama_model: "llama3.1:8b"  # 8B parameters - much smarter than 3b!
+voice: "Alex"  # Mac voice name - Alex has a more sophisticated, measured tone like movie JARVIS
+speech_rate: 175  # Words per minute (slower, more natural) - default: 175, was: 200
+
+# Audio settings
+audio:
+  sample_rate: 16000
+  channels: 1
+  duration: 8  # Maximum recording duration in seconds
+  silence_threshold: 0.005  # Silence detection threshold (lower = more sensitive)
+  silence_duration: 2.0  # Seconds of silence before stopping recording
+
+# GUI settings
+gui:
+  background: "#000000"
+  text_color: "#00ff41"  # Matrix green
+  width: 700
+  height: 500
+  font_size: 12
+  font_family: "Courier"
+  transparency: 0.95  # 0.0 (invisible) to 1.0 (opaque)
+
+# Conversation settings
+conversation:
+  timeout: 30  # Seconds before closing window after last interaction
+  max_history: 10  # Number of conversation turns to remember
+
