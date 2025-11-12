@@ -76,9 +76,10 @@ class LLMBrain:
                 model=self.model,
                 messages=messages,
                 options={
-                    "temperature": 0.7,
+                    "temperature": 0.3,  # Lower for more consistent JSON formatting
                     "top_p": 0.9,
-                }
+                },
+                format="json"  # Force JSON output mode
             )
             
             # Extract response text

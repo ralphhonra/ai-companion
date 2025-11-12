@@ -266,29 +266,45 @@ class Jarvis:
         self.gui.set_status("THINKING")
         llm_response = self.brain.process(user_text)
         
+        print(f"\n{'='*60}")
         print(f"LLM Response: {llm_response}")
+        print(f"{'='*60}\n")
         
         # Execute tools
         success, result = self.tools.execute(llm_response)
+        print(f"Tool execution success: {success}")
+        print(f"Tool result: {result}")
         
         # Speak response
         self.gui.set_status("SPEAKING")
         
-        # Clean up response - remove any JSON artifacts
-        response_text = result.strip()
+        # Extract clean response text from LLM JSON
+        response_text = "Task completed, sir."
+        try:
+            import json
+            llm_data = json.loads(llm_response)
+            response_text = llm_data.get('response', 'Task completed, sir.')
+            print(f"Extracted response: {response_text}")
+        except Exception as e:
+            print(f"JSON parse error: {e}")
+            # If LLM didn't return JSON, use the result
+            if result and not result.startswith('Unknown'):
+                response_text = result
         
-        # If response still looks like JSON, extract the response field
-        if response_text.startswith('{') and '"response"' in response_text:
-            try:
-                import json
-                data = json.loads(response_text)
-                response_text = data.get('response', 'Task completed.')
-            except:
-                # If parsing fails, try to extract text manually
-                response_text = "Task completed."
+        # Clean up any remaining JSON artifacts
+        if response_text.startswith('{'):
+            response_text = "Task completed, sir."
+        
+        response_text = response_text.strip()
         
         # Get first line for speaking, full text for display
         speak_text = response_text.split('\n')[0] if '\n' in response_text else response_text
+        
+        # Add tool execution result details if any
+        if result and not result.startswith('{') and result != response_text:
+            details_text = result
+        else:
+            details_text = ""
         
         # Start speaking immediately (non-blocking)
         speech_thread = self.tts.speak_async(speak_text)
@@ -299,10 +315,9 @@ class Jarvis:
         # Wait for speech to complete
         speech_thread.join()
         
-        # Show additional details if any
-        if '\n' in result:
-            details = '\n'.join(result.split('\n')[1:])
-            self.gui.add_text(details, "")
+        # Show additional details if any (like search results, error messages)
+        if details_text:
+            self.gui.add_text(details_text, "")
         
         self.gui.set_status("READY")
     

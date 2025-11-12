@@ -20,6 +20,8 @@ class ToolExecutor:
             "control_app": self._control_app,
             "web_search": self._web_search,
             "open_url": self._open_url,
+            "play_youtube": self._play_youtube,
+            "browser_control": self._browser_control,
             "none": self._no_action,
         }
     
@@ -39,9 +41,15 @@ class ToolExecutor:
             tool = data.get("tool", "none")
             response_text = data.get("response", "")
             
+            print(f"🔧 Tool: {tool}")
+            print(f"📝 Response text: {response_text}")
+            print(f"📦 Data: {data}")
+            
             # Execute tool
             if tool in self.tool_handlers:
+                print(f"✓ Executing tool handler: {tool}")
                 success, details = self.tool_handlers[tool](data)
+                print(f"✓ Tool result - Success: {success}, Details: {details}")
                 
                 # Combine response with details if any
                 if details:
@@ -51,15 +59,45 @@ class ToolExecutor:
                 
                 return success, full_response
             else:
-                print(f"⚠️  Unknown action: {tool}")
+                print(f"⚠️  Unknown tool: {tool}, attempting fallback...")
                 # Try to guess what the user wanted based on the parameters
                 return self._handle_unknown_action(data, response_text)
                 
         except json.JSONDecodeError as e:
             print(f"JSON parse error: {e}")
             print(f"Response was: {llm_response}")
-            # If not JSON, treat as plain response
-            return True, llm_response
+            
+            # Try to extract just the first JSON object if multiple were sent
+            try:
+                # Find the first complete JSON object
+                lines = llm_response.strip().split('\n')
+                json_str = ""
+                brace_count = 0
+                
+                for line in lines:
+                    json_str += line
+                    brace_count += line.count('{') - line.count('}')
+                    if brace_count == 0 and json_str.strip():
+                        # Found complete JSON
+                        break
+                
+                # Try parsing just the first JSON
+                data = json.loads(json_str)
+                tool = data.get("tool", "none")
+                response_text = data.get("response", "")
+                
+                print(f"✓ Recovered first JSON object: {tool}")
+                
+                if tool in self.tool_handlers:
+                    success, details = self.tool_handlers[tool](data)
+                    return success, response_text if not details else f"{response_text}\n{details}"
+                else:
+                    return self._handle_unknown_action(data, response_text)
+                    
+            except Exception as recovery_error:
+                print(f"Could not recover JSON: {recovery_error}")
+                # If not JSON, treat as plain response
+                return True, llm_response
         except Exception as e:
             return False, f"Error executing tool: {e}"
     
@@ -230,6 +268,66 @@ class ToolExecutor:
         except Exception as e:
             return False, f"Error: {e}"
     
+    def _play_youtube(self, data: Dict[str, Any]) -> tuple[bool, str]:
+        """Play a YouTube video or music."""
+        query = data.get("query", "")
+        if not query:
+            return False, "No search query provided."
+        
+        try:
+            # Open YouTube search
+            search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+            subprocess.run(["open", search_url], check=True)
+            return True, ""
+        except Exception as e:
+            return False, f"Error: {e}"
+    
+    def _browser_control(self, data: Dict[str, Any]) -> tuple[bool, str]:
+        """Control browser via AppleScript."""
+        action = data.get("action", "")
+        browser = data.get("browser", "Safari")
+        
+        # Normalize browser name
+        if "chrome" in browser.lower():
+            browser = "Google Chrome"
+        
+        # Different scripts for different browsers
+        if browser == "Safari":
+            scripts = {
+                "refresh": 'tell application "Safari" to do JavaScript "location.reload()" in current tab of front window',
+                "back": 'tell application "Safari" to go back',
+                "forward": 'tell application "Safari" to go forward',
+                "new_tab": 'tell application "Safari" to make new tab at end of tabs of front window',
+                "close_tab": 'tell application "Safari" to close current tab of front window',
+            }
+        else:  # Chrome
+            scripts = {
+                "refresh": 'tell application "Google Chrome" to reload active tab of front window',
+                "back": 'tell application "Google Chrome" to go back active tab of front window',
+                "forward": 'tell application "Google Chrome" to go forward active tab of front window',
+                "new_tab": 'tell application "Google Chrome" to make new tab at end of front window',
+                "close_tab": 'tell application "Google Chrome" to close active tab of front window',
+            }
+        
+        script = scripts.get(action)
+        if not script:
+            return False, f"Unknown browser action: {action}"
+        
+        try:
+            subprocess.run(
+                ["osascript", "-e", script],
+                check=True,
+                capture_output=True,
+                timeout=5
+            )
+            return True, ""
+        except subprocess.TimeoutExpired:
+            return False, f"{browser} is not responding."
+        except subprocess.CalledProcessError as e:
+            return False, f"{browser} is not running. Please open it first."
+        except Exception as e:
+            return False, f"Error: {e}"
+    
     def _handle_unknown_action(self, data: Dict[str, Any], response_text: str) -> tuple[bool, str]:
         """
         Try to handle unknown actions by guessing intent.
@@ -237,13 +335,24 @@ class ToolExecutor:
         tool = data.get("tool", "")
         
         # Map common unknown actions to real ones
-        if "tab" in tool.lower() or "chrome" in tool.lower():
-            # User wants to open Chrome or a new tab
+        if "youtube" in tool.lower() or "play" in tool.lower() and "track" in tool.lower():
+            # User wants to play YouTube
+            query = data.get("query", data.get("track", "music"))
+            return self._play_youtube({"query": query, "response": response_text})
+        
+        elif "tab" in tool.lower() and "new" in tool.lower():
+            # New tab
+            return self._browser_control({"action": "new_tab", "browser": "Safari", "response": response_text})
+        
+        elif "chrome" in tool.lower() or "browser" in tool.lower():
+            # User wants to open Chrome or browser
             try:
-                subprocess.run(["open", "-a", "Google Chrome", ""], check=True)
+                subprocess.run(["open", "-a", "Google Chrome"], check=True)
                 return True, response_text
             except:
-                return False, "Could not open Chrome."
+                # Try Safari
+                subprocess.run(["open", "-a", "Safari"], check=True)
+                return True, response_text
         
         elif "record" in tool.lower() or "voice" in tool.lower():
             # User wants a voice recorder app

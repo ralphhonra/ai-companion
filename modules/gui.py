@@ -119,6 +119,18 @@ class JarvisGUI:
         separator = tk.Frame(self.root, bg=self.text_color, height=2)
         separator.pack(fill=tk.X, padx=10)
         
+        # Audio waveform visualization
+        self.waveform_canvas = tk.Canvas(
+            self.root,
+            bg=self.bg_color,
+            height=100,
+            highlightthickness=0
+        )
+        self.waveform_canvas.pack(fill=tk.X, padx=10, pady=10)
+        self.waveform_bars = self._create_waveform()
+        self.is_speaking_anim = False
+        self.anim_frame = 0
+        
         # Status indicator
         self.status_label = tk.Label(
             self.root,
@@ -203,6 +215,13 @@ class JarvisGUI:
         color = color or status_colors.get(status, self.text_color)
         
         self.status_label.config(text=f"● {status}", fg=color)
+        
+        # Control face animation based on status
+        if status == "SPEAKING":
+            self.start_speaking_animation()
+        else:
+            self.stop_speaking_animation()
+        
         self.root.update()
     
     def clear_text(self) -> None:
@@ -260,6 +279,109 @@ class JarvisGUI:
     def set_close_callback(self, callback: Callable) -> None:
         """Set callback function when window closes."""
         self.on_close_callback = callback
+    
+    def _create_waveform(self) -> list:
+        """Create audio waveform bars."""
+        import random
+        
+        bars = []
+        num_bars = 50  # Number of vertical bars
+        bar_width = 8
+        spacing = 2
+        total_width = num_bars * (bar_width + spacing)
+        start_x = (700 - total_width) // 2  # Center the waveform
+        
+        center_y = 50  # Middle of the canvas
+        
+        for i in range(num_bars):
+            x = start_x + i * (bar_width + spacing)
+            # Create bars with varying initial heights
+            height = random.randint(5, 15)
+            
+            bar = self.waveform_canvas.create_rectangle(
+                x, center_y - height,
+                x + bar_width, center_y + height,
+                fill=self.text_color,
+                outline=''
+            )
+            bars.append(bar)
+        
+        return bars
+    
+    def start_speaking_animation(self) -> None:
+        """Start waveform animation for speaking."""
+        self.is_speaking_anim = True
+        self._animate_waveform()
+    
+    def stop_speaking_animation(self) -> None:
+        """Stop waveform animation."""
+        self.is_speaking_anim = False
+        # Reset bars to minimal height
+        self._reset_waveform()
+    
+    def _reset_waveform(self) -> None:
+        """Reset waveform bars to idle state."""
+        if not self.waveform_bars or not self.root:
+            return
+        
+        center_y = 50
+        num_bars = len(self.waveform_bars)
+        bar_width = 8
+        spacing = 2
+        total_width = num_bars * (bar_width + spacing)
+        start_x = (700 - total_width) // 2
+        
+        for i, bar in enumerate(self.waveform_bars):
+            x = start_x + i * (bar_width + spacing)
+            height = 3  # Minimal height when idle
+            self.waveform_canvas.coords(
+                bar,
+                x, center_y - height,
+                x + bar_width, center_y + height
+            )
+    
+    def _animate_waveform(self) -> None:
+        """Animate audio waveform bars while speaking."""
+        if not self.is_speaking_anim or not self.root:
+            return
+        
+        import random
+        import math
+        
+        self.anim_frame = (self.anim_frame + 1) % 60
+        
+        center_y = 50
+        num_bars = len(self.waveform_bars)
+        bar_width = 8
+        spacing = 2
+        total_width = num_bars * (bar_width + spacing)
+        start_x = (700 - total_width) // 2
+        
+        for i, bar in enumerate(self.waveform_bars):
+            x = start_x + i * (bar_width + spacing)
+            
+            # Create wave pattern - higher in the middle, lower on edges
+            distance_from_center = abs(i - num_bars // 2)
+            base_multiplier = 1.0 - (distance_from_center / (num_bars // 2)) * 0.4
+            
+            # Add random variation for natural audio effect
+            wave = math.sin((self.anim_frame + i * 3) * 0.2) * 0.5 + 0.5
+            random_factor = random.uniform(0.7, 1.3)
+            
+            # Calculate bar height
+            height = int((15 + wave * 25) * base_multiplier * random_factor)
+            height = max(5, min(height, 45))  # Clamp between 5 and 45
+            
+            # Update bar position
+            self.waveform_canvas.coords(
+                bar,
+                x, center_y - height,
+                x + bar_width, center_y + height
+            )
+        
+        # Continue animation
+        if self.is_speaking_anim:
+            self.root.after(50, self._animate_waveform)
 
 
 def run_gui_test():

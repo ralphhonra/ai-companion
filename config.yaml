@@ -2,7 +2,7 @@ wake_word: "jarvis"
 whisper_model: "medium"  # Options: tiny, base, small, medium (larger = more accurate but slower)
 ollama_model: "llama3.1:8b"  # 8B parameters - much smarter than 3b!
 voice: "Alex"  # Mac voice name - Alex has a more sophisticated, measured tone like movie JARVIS
-speech_rate: 175  # Words per minute (slower, more natural) - default: 175, was: 200
+speech_rate: 180  # Words per minute (slower, more natural) - default: 175, was: 200
 
 # Audio settings
 audio:
