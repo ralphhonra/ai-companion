@@ -188,6 +188,10 @@ class Jarvis:
             return  # Already active
         
         print("\n>>> Wake word detected! <<<")
+        
+        # Play immediate acknowledgment sound
+        self.tts.play_sound_effect("ready")
+        
         self.is_active = True
         # Main thread loop will pick this up and show GUI
     
@@ -201,12 +205,32 @@ class Jarvis:
         
         print("GUI visible, starting conversation...")
         
+        # Play activation sound and greeting
+        self.tts.play_sound_effect("activate")
+        time.sleep(0.3)
+        
+        # Activation greeting
+        activation_messages = [
+            "Systems online. Say 'Hey Jarvis' before each command, sir.",
+            "At your service, sir. Remember to begin each request with 'Hey Jarvis'.",
+            "JARVIS activated. Please prefix all commands with 'Hey Jarvis', sir.",
+            "Online and ready, sir. Say 'Hey Jarvis' followed by your request.",
+            "Standing by. Always say 'Hey Jarvis' before your commands, sir.",
+        ]
+        import random
+        greeting = random.choice(activation_messages)
+        
+        self.gui.set_status("READY")
+        self.gui.add_text(greeting, "JARVIS: ")
+        self.tts.speak(greeting, blocking=True)
+        time.sleep(0.5)
+        
+        # Set to listening mode
+        self.gui.set_status("LISTENING")
+        
         while self.is_active and self.gui.is_visible:
             try:
-                # Listen for user input
-                self.gui.set_status("LISTENING")
-                print("Status: LISTENING - Speak now...")
-                
+                # Continuously listen for user input
                 audio_config = self.config['audio']
                 user_text = self.stt.listen(
                     duration=audio_config['duration'],
@@ -214,15 +238,60 @@ class Jarvis:
                     silence_duration=audio_config['silence_duration']
                 )
                 
-                print(f"📝 Transcribed: '{user_text}'")
-                
+                # Skip if no speech detected
                 if not user_text or len(user_text.strip()) < 2:
-                    # No speech detected, timeout after a while
-                    print("⚠️  No speech detected or text too short, listening again...")
-                    self._start_timeout()
+                    # Silently continue listening - no console spam
                     continue
                 
-                print(f"✓ Valid input detected: '{user_text}'")
+                # Show transcription
+                print(f"📝 Transcribed: '{user_text}'")
+                
+                # Check if user said "Hey Jarvis" prefix (with flexible matching)
+                user_text_lower = user_text.lower()
+                
+                # More flexible prefixes (handles misspellings and variations)
+                wake_prefixes = [
+                    'hey jarvis,', 'hey jarvis', 
+                    'hey jervis,', 'hey jervis',  # Common misspelling
+                    'hey jarvice,', 'hey jarvice',  # Another variant
+                    'jarvis,', 'jarvis',
+                    'jervis,', 'jervis',
+                    'hi jarvis,', 'hi jarvis',  # Alternative greeting
+                ]
+                
+                has_wake_prefix = False
+                matched_prefix = ""
+                
+                for prefix in wake_prefixes:
+                    if user_text_lower.startswith(prefix):
+                        has_wake_prefix = True
+                        matched_prefix = prefix
+                        break
+                
+                # Also check if "jarvis" or "jervis" appears in first 3 words
+                first_words = ' '.join(user_text_lower.split()[:3])
+                if not has_wake_prefix and any(word in first_words for word in ['jarvis', 'jervis', 'jarvice']):
+                    has_wake_prefix = True
+                    print("✓ Found wake word in first part of speech")
+                
+                if not has_wake_prefix:
+                    # User didn't say "Hey Jarvis" - silently ignore and keep listening
+                    print("⚠️  No 'Hey Jarvis' prefix - silently ignoring...")
+                    # Don't show ignored messages in GUI - just continue listening
+                    continue
+                
+                # Strip the wake prefix from the command
+                if matched_prefix:
+                    user_text = user_text[len(matched_prefix):].strip()
+                else:
+                    # If we matched via first words, try to strip it
+                    words = user_text.split()
+                    if len(words) > 2 and words[0].lower() in ['hey', 'hi']:
+                        user_text = ' '.join(words[2:])  # Skip "Hey Jarvis"
+                    elif len(words) > 1:
+                        user_text = ' '.join(words[1:])  # Skip "Jarvis"
+                
+                print(f"✓ Valid command with 'Hey Jarvis' prefix: '{user_text}'")
                 
                 # Cancel timeout since we got input
                 self._cancel_timeout()
@@ -237,23 +306,49 @@ class Jarvis:
                 # Check for exit commands
                 if any(word in user_text.lower() for word in ['goodbye', 'exit', 'quit', 'close']):
                     self.gui.set_status("SPEAKING")
-                    response = "Goodbye, sir. Standing by."
+                    
+                    # Random farewell messages
+                    farewells = [
+                        "Goodbye, sir. Always a pleasure.",
+                        "Until next time, sir. Standing by.",
+                        "Farewell, sir. I'll be here when you need me.",
+                        "Signing off, sir. All systems entering standby mode.",
+                        "Very good, sir. I shall be standing by.",
+                    ]
+                    import random
+                    response = random.choice(farewells)
+                    
                     self.gui.type_text(response, "JARVIS: ")
                     self.tts.speak(response, blocking=True)
-                    time.sleep(1)
+                    time.sleep(0.5)
+                    
+                    # Play deactivation sound
+                    self.tts.play_sound_effect("deactivate")
+                    time.sleep(0.5)
+                    
                     self.gui.hide()
                     break
                 
                 # Process with LLM
-                self.process_command(user_text)
+                try:
+                    self.process_command(user_text)
+                except Exception as cmd_error:
+                    print(f"⚠️  Error processing command: {cmd_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continue listening even if command failed
                 
-                # Start timeout timer
-                self._start_timeout()
+                # Always return to listening mode
+                self.gui.set_status("LISTENING")
                 
             except Exception as e:
-                print(f"Error in conversation loop: {e}")
+                print(f"❌ Error in conversation loop: {e}")
+                import traceback
+                traceback.print_exc()
                 self.gui.set_status("ERROR")
-                time.sleep(2)
+                time.sleep(1)
+                # Always return to listening - don't break the loop!
+                self.gui.set_status("LISTENING")
     
     def process_command(self, user_text: str) -> None:
         """
@@ -319,7 +414,7 @@ class Jarvis:
         if details_text:
             self.gui.add_text(details_text, "")
         
-        self.gui.set_status("READY")
+        # Don't set status here - let the conversation loop manage it
     
     def _start_timeout(self) -> None:
         """Start inactivity timeout."""

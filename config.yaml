@@ -9,8 +9,8 @@ audio:
   sample_rate: 16000
   channels: 1
   duration: 8  # Maximum recording duration in seconds
-  silence_threshold: 0.005  # Silence detection threshold (lower = more sensitive)
-  silence_duration: 2.0  # Seconds of silence before stopping recording
+  silence_threshold: 0.02  # Silence detection threshold (higher = less sensitive, captures more audio)
+  silence_duration: 1.5  # Seconds of silence before stopping
 
 # GUI settings
 gui:
@@ -25,5 +25,5 @@ gui:
 # Conversation settings
 conversation:
   timeout: 30  # Seconds before closing window after last interaction
-  max_history: 10  # Number of conversation turns to remember
+  max_history: 6  # Number of conversation turns to remember (reduced for faster processing)
 

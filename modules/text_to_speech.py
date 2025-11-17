@@ -5,6 +5,7 @@ Uses Mac's built-in 'say' command for voice synthesis.
 import subprocess
 import threading
 from typing import Optional
+import os
 
 
 class TextToSpeech:
@@ -82,6 +83,33 @@ class TextToSpeech:
         """Check if currently speaking."""
         return (self.current_process is not None and 
                 self.current_process.poll() is None)
+    
+    def play_sound_effect(self, sound_type: str) -> None:
+        """
+        Play system sound effect.
+        
+        Args:
+            sound_type: Type of sound (activate, deactivate, error)
+        """
+        sounds = {
+            "activate": "Tink",      # Activation beep
+            "deactivate": "Pop",     # Deactivation sound
+            "error": "Basso",        # Error sound
+            "ready": "Glass",        # Ready sound
+        }
+        
+        sound = sounds.get(sound_type, "Tink")
+        
+        try:
+            # Play system sound
+            subprocess.run(
+                ["afplay", f"/System/Library/Sounds/{sound}.aiff"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except:
+            pass
     
     @staticmethod
     def list_voices() -> list:

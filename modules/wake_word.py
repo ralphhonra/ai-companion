@@ -95,6 +95,11 @@ class WakeWordDetector:
                 blocksize=self.porcupine.frame_length
             ) as stream:
                 
+                # Buffer to capture audio after wake word
+                post_wake_buffer = []
+                capturing_post_wake = False
+                frames_to_capture = int(3.0 * self.porcupine.sample_rate / self.porcupine.frame_length)  # 3 seconds
+                
                 while self.is_listening:
                     # Read audio frame
                     audio_frame, overflowed = stream.read(self.porcupine.frame_length)
@@ -105,12 +110,25 @@ class WakeWordDetector:
                     # Convert to int16 array
                     pcm = audio_frame.flatten().astype(np.int16)
                     
-                    # Process frame
+                    # If capturing post-wake audio, add to buffer
+                    if capturing_post_wake:
+                        post_wake_buffer.append(pcm)
+                        if len(post_wake_buffer) >= frames_to_capture:
+                            capturing_post_wake = False
+                            # Process captured audio
+                            if self.callback and hasattr(self, 'post_wake_audio'):
+                                self.post_wake_audio = np.concatenate(post_wake_buffer)
+                    
+                    # Process frame for wake word
                     keyword_index = self.porcupine.process(pcm)
                     
                     # Wake word detected!
                     if keyword_index >= 0:
                         print(f"Wake word '{self.keyword}' detected!")
+                        # Start capturing audio after wake word
+                        post_wake_buffer = []
+                        capturing_post_wake = True
+                        
                         if self.callback:
                             # Call callback in separate thread
                             threading.Thread(

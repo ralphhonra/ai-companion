@@ -50,7 +50,8 @@ class SpeechToText:
             Audio data as numpy array or None if error
         """
         try:
-            print("🎤 Recording... (speak now or wait for silence)")
+            # Silently record - don't spam console
+            pass  # print("🎤 Recording...")
             
             # Calculate frames for silence detection
             silence_frames = int(silence_duration * self.sample_rate)
@@ -87,7 +88,7 @@ class SpeechToText:
                     silence_count = 0
             
             sd.wait()  # Ensure recording is complete
-            print("Recording complete.")
+            # print("Recording complete.")  # Don't spam console
             
             return recording
             
