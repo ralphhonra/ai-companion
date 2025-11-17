@@ -22,6 +22,7 @@ class ToolExecutor:
             "open_url": self._open_url,
             "play_youtube": self._play_youtube,
             "browser_control": self._browser_control,
+            "list_apps": self._list_apps,
             "none": self._no_action,
         }
     
@@ -100,6 +101,50 @@ class ToolExecutor:
                 return True, llm_response
         except Exception as e:
             return False, f"Error executing tool: {e}"
+    
+    def _list_apps(self, data: Dict[str, Any]) -> tuple[bool, str]:
+        """List installed applications on the system."""
+        try:
+            # Use mdfind to find all applications
+            result = subprocess.run(
+                ["mdfind", "kMDItemKind == 'Application'"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True
+            )
+            
+            apps = result.stdout.strip().split('\n')
+            # Extract just the app name (last part of path)
+            app_names = []
+            seen = set()
+            
+            for app_path in apps:
+                if app_path:
+                    # Get the app name (e.g., "/Applications/Spotify.app" -> "Spotify")
+                    app_name = app_path.split('/')[-1].replace('.app', '')
+                    if app_name and app_name not in seen:
+                        app_names.append(app_name)
+                        seen.add(app_name)
+            
+            # Sort alphabetically
+            app_names.sort()
+            
+            if not app_names:
+                return True, "No applications found."
+            
+            # Format nicely - show first 30 apps
+            if len(app_names) > 30:
+                app_list = '\n'.join(app_names[:30])
+                return True, f"Found {len(app_names)} installed applications. Here are the first 30:\n\n{app_list}\n\n... and {len(app_names) - 30} more."
+            else:
+                app_list = '\n'.join(app_names)
+                return True, f"Found {len(app_names)} installed applications:\n\n{app_list}"
+                
+        except subprocess.TimeoutExpired:
+            return False, "Search for applications timed out."
+        except Exception as e:
+            return False, f"Error listing applications: {e}"
     
     def _no_action(self, data: Dict[str, Any]) -> tuple[bool, str]:
         """No system action needed."""
@@ -330,50 +375,11 @@ class ToolExecutor:
     
     def _handle_unknown_action(self, data: Dict[str, Any], response_text: str) -> tuple[bool, str]:
         """
-        Try to handle unknown actions by guessing intent.
+        Handle unknown actions - this should rarely happen if LLM understands intent correctly.
+        The LLM should be smart enough to choose the right tool, not rely on hardcoded fallbacks.
         """
-        tool = data.get("tool", "")
-        
-        # Map common unknown actions to real ones
-        if "youtube" in tool.lower() or "play" in tool.lower() and "track" in tool.lower():
-            # User wants to play YouTube
-            query = data.get("query", data.get("track", "music"))
-            return self._play_youtube({"query": query, "response": response_text})
-        
-        elif "tab" in tool.lower() and "new" in tool.lower():
-            # New tab
-            return self._browser_control({"action": "new_tab", "browser": "Safari", "response": response_text})
-        
-        elif "chrome" in tool.lower() or "browser" in tool.lower():
-            # User wants to open Chrome or browser
-            try:
-                subprocess.run(["open", "-a", "Google Chrome"], check=True)
-                return True, response_text
-            except:
-                # Try Safari
-                subprocess.run(["open", "-a", "Safari"], check=True)
-                return True, response_text
-        
-        elif "record" in tool.lower() or "voice" in tool.lower():
-            # User wants a voice recorder app
-            try:
-                # Try QuickTime Player (has audio recording)
-                subprocess.run(["open", "-a", "QuickTime Player"], check=True)
-                return True, f"{response_text}\nOpened QuickTime Player. Go to File → New Audio Recording."
-            except:
-                return False, "Could not open recording app."
-        
-        elif "note" in tool.lower():
-            # User wants Notes app
-            try:
-                subprocess.run(["open", "-a", "Notes"], check=True)
-                return True, response_text
-            except:
-                return False, "Could not open Notes."
-        
-        else:
-            # Don't know what to do
-            return False, f"I'm not sure how to {tool}. Try asking me to 'open [app name]' instead."
+        tool = data.get("tool", "unknown")
+        return False, f"Unknown tool '{tool}'. The LLM should reconsider the user's intent and use the correct tool from the available list. Think about what the user REALLY wants to accomplish, not just matching words literally."
 
 
 if __name__ == "__main__":

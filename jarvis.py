@@ -211,11 +211,11 @@ class Jarvis:
         
         # Activation greeting
         activation_messages = [
-            "Systems online. Say 'Hey Jarvis' before each command, sir.",
-            "At your service, sir. Remember to begin each request with 'Hey Jarvis'.",
-            "JARVIS activated. Please prefix all commands with 'Hey Jarvis', sir.",
-            "Online and ready, sir. Say 'Hey Jarvis' followed by your request.",
-            "Standing by. Always say 'Hey Jarvis' before your commands, sir.",
+            "Systems online. I'm listening continuously, sir.",
+            "At your service, sir. I'm ready to assist at any time.",
+            "JARVIS activated. I'm listening to everything you say, sir.",
+            "Online and ready, sir. Just speak naturally and I'll respond.",
+            "Standing by. I'm continuously monitoring for your commands, sir.",
         ]
         import random
         greeting = random.choice(activation_messages)
@@ -235,7 +235,8 @@ class Jarvis:
                 user_text = self.stt.listen(
                     duration=audio_config['duration'],
                     silence_threshold=audio_config['silence_threshold'],
-                    silence_duration=audio_config['silence_duration']
+                    silence_duration=audio_config['silence_duration'],
+                    min_duration=audio_config.get('min_duration', 1.0)
                 )
                 
                 # Skip if no speech detected
@@ -246,57 +247,11 @@ class Jarvis:
                 # Show transcription
                 print(f"📝 Transcribed: '{user_text}'")
                 
-                # Check if user said "Hey Jarvis" prefix (with flexible matching)
-                user_text_lower = user_text.lower()
-                
-                # More flexible prefixes (handles misspellings and variations)
-                wake_prefixes = [
-                    'hey jarvis,', 'hey jarvis', 
-                    'hey jervis,', 'hey jervis',  # Common misspelling
-                    'hey jarvice,', 'hey jarvice',  # Another variant
-                    'jarvis,', 'jarvis',
-                    'jervis,', 'jervis',
-                    'hi jarvis,', 'hi jarvis',  # Alternative greeting
-                ]
-                
-                has_wake_prefix = False
-                matched_prefix = ""
-                
-                for prefix in wake_prefixes:
-                    if user_text_lower.startswith(prefix):
-                        has_wake_prefix = True
-                        matched_prefix = prefix
-                        break
-                
-                # Also check if "jarvis" or "jervis" appears in first 3 words
-                first_words = ' '.join(user_text_lower.split()[:3])
-                if not has_wake_prefix and any(word in first_words for word in ['jarvis', 'jervis', 'jarvice']):
-                    has_wake_prefix = True
-                    print("✓ Found wake word in first part of speech")
-                
-                if not has_wake_prefix:
-                    # User didn't say "Hey Jarvis" - silently ignore and keep listening
-                    print("⚠️  No 'Hey Jarvis' prefix - silently ignoring...")
-                    # Don't show ignored messages in GUI - just continue listening
-                    continue
-                
-                # Strip the wake prefix from the command
-                if matched_prefix:
-                    user_text = user_text[len(matched_prefix):].strip()
-                else:
-                    # If we matched via first words, try to strip it
-                    words = user_text.split()
-                    if len(words) > 2 and words[0].lower() in ['hey', 'hi']:
-                        user_text = ' '.join(words[2:])  # Skip "Hey Jarvis"
-                    elif len(words) > 1:
-                        user_text = ' '.join(words[1:])  # Skip "Jarvis"
-                
-                print(f"✓ Valid command with 'Hey Jarvis' prefix: '{user_text}'")
-                
+                # Process ALL speech - no wake word required!
                 # Cancel timeout since we got input
                 self._cancel_timeout()
                 
-                # Display user input (cleaned up)
+                # Display user input
                 display_text = user_text.strip()
                 self.gui.add_text(display_text, "USER: ")
                 

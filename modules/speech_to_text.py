@@ -36,29 +36,30 @@ class SpeechToText:
         self,
         duration: int = 5,
         silence_threshold: float = 0.01,
-        silence_duration: float = 1.5
+        silence_duration: float = 1.5,
+        min_duration: float = 1.0
     ) -> Optional[np.ndarray]:
         """
-        Record audio from microphone.
+        Record audio from microphone with improved silence detection.
         
         Args:
             duration: Maximum recording duration in seconds
-            silence_threshold: Threshold for silence detection
+            silence_threshold: Threshold for silence detection (lower = more sensitive)
             silence_duration: Seconds of silence before stopping
+            min_duration: Minimum recording duration (ensures we capture at least this much)
             
         Returns:
             Audio data as numpy array or None if error
         """
         try:
-            # Silently record - don't spam console
-            pass  # print("🎤 Recording...")
-            
-            # Calculate frames for silence detection
+            # Calculate frames
             silence_frames = int(silence_duration * self.sample_rate)
+            min_frames = int(min_duration * self.sample_rate)
+            max_frames = int(duration * self.sample_rate)
             
             # Record audio
             recording = sd.rec(
-                int(duration * self.sample_rate),
+                max_frames,
                 samplerate=self.sample_rate,
                 channels=1,
                 dtype='float32'
@@ -67,28 +68,43 @@ class SpeechToText:
             # Wait for recording to complete or detect silence
             frames_recorded = 0
             silence_count = 0
+            check_interval_ms = 200  # Check every 200ms (less frequent, more stable)
+            check_interval_frames = int(check_interval_ms / 1000.0 * self.sample_rate)
             
-            while frames_recorded < len(recording):
-                sd.wait(100)  # Check every 100ms
-                frames_recorded += int(0.1 * self.sample_rate)
+            while frames_recorded < max_frames:
+                sd.wait(check_interval_ms)
+                frames_recorded += check_interval_frames
                 
-                if frames_recorded >= len(recording):
+                # Don't stop before minimum duration
+                if frames_recorded < min_frames:
+                    silence_count = 0  # Reset silence counter during min duration
+                    continue
+                
+                if frames_recorded >= max_frames:
                     break
                 
-                # Check for silence in last chunk
-                chunk = recording[max(0, frames_recorded - int(0.1 * self.sample_rate)):frames_recorded]
-                if np.abs(chunk).mean() < silence_threshold:
-                    silence_count += int(0.1 * self.sample_rate)
+                # Check for silence in a larger window (more stable)
+                window_size = min(check_interval_frames * 2, frames_recorded)
+                chunk = recording[max(0, frames_recorded - window_size):frames_recorded]
+                
+                # Use RMS (root mean square) for better silence detection
+                rms = np.sqrt(np.mean(chunk**2))
+                
+                if rms < silence_threshold:
+                    silence_count += check_interval_frames
                     if silence_count >= silence_frames:
-                        # Stop recording on silence
+                        # Stop recording on silence (but only after min duration)
                         sd.stop()
                         recording = recording[:frames_recorded]
                         break
                 else:
-                    silence_count = 0
+                    silence_count = 0  # Reset if we detect sound
             
             sd.wait()  # Ensure recording is complete
-            # print("Recording complete.")  # Don't spam console
+            
+            # Trim to actual recorded length
+            if frames_recorded < max_frames:
+                recording = recording[:frames_recorded]
             
             return recording
             
@@ -140,7 +156,8 @@ class SpeechToText:
         self,
         duration: int = 5,
         silence_threshold: float = 0.01,
-        silence_duration: float = 1.5
+        silence_duration: float = 1.5,
+        min_duration: float = 1.0
     ) -> str:
         """
         Record and transcribe in one step.
@@ -149,11 +166,12 @@ class SpeechToText:
             duration: Maximum recording duration
             silence_threshold: Silence detection threshold
             silence_duration: Seconds of silence before stopping
+            min_duration: Minimum recording duration
             
         Returns:
             Transcribed text
         """
-        audio = self.record_audio(duration, silence_threshold, silence_duration)
+        audio = self.record_audio(duration, silence_threshold, silence_duration, min_duration)
         if audio is not None:
             return self.transcribe_audio(audio)
         return ""

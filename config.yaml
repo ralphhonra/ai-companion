@@ -8,9 +8,10 @@ speech_rate: 180  # Words per minute (slower, more natural) - default: 175, was:
 audio:
   sample_rate: 16000
   channels: 1
-  duration: 8  # Maximum recording duration in seconds
-  silence_threshold: 0.02  # Silence detection threshold (higher = less sensitive, captures more audio)
-  silence_duration: 1.5  # Seconds of silence before stopping
+  duration: 15  # Maximum recording duration in seconds (increased for longer sentences)
+  silence_threshold: 0.005  # Silence detection threshold (lower = more sensitive, waits longer before stopping)
+  silence_duration: 3.0  # Seconds of silence before stopping (increased to allow natural pauses)
+  min_duration: 1.0  # Minimum recording duration (ensures we capture at least this much)
 
 # GUI settings
 gui:
